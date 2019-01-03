@@ -185,6 +185,7 @@ class Problem:
 
         if self.verifier_exec_path is None:
             command = ['diff',
+                       '-w',
                        test.output_path.resolve(),
                        output_path.resolve()]
         else:
