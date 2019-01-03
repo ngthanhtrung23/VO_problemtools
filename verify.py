@@ -84,14 +84,17 @@ class Problem:
                              % (total_score, self.config['problem']['score']))
 
         # self.verifier
-        self.verifier_path = self.path / "output_checker" / "checker.cpp"
-        if not self.verifier_path.exists():
-            self.verifier_path = None
-            self.verifier_exec_path = None
-        else:
+        if 'checker' in self.config['problem']:
+            self.verifier_path = self.path / "output_checker" / self.config['problem']['checker']
+            if not self.verifier_path.exists():
+                raise ValueError("Output checker not found: %s" % self.config['problem']['checker'])
+
             print("Compiling checker..")
             self.verifier_exec_path = Path("./tmp") / "checker"
             compile_cpp(self.verifier_path, self.verifier_exec_path)
+        else:
+            self.verifier_path = None
+            self.verifier_exec_path = None
 
     """
     Make sure all tests have input + output.
@@ -139,21 +142,39 @@ class Problem:
         time_limit_secs = int(self.config['limits']['time_secs'])
         for subtask in self.subtasks:
             print("- Subtask: ", subtask.regex)
+
+            if len(subtask.tests) == 0:
+                print("WARNING: Subtask has 0 tests")
+                continue
+
             print("  Running on tests..")
+            print("  Verdict..")
 
             score_per_test = 1.0 / len(subtask.tests) * subtask.score
             subtask_score = 0.0
             for test in subtask.tests:
+                erase_terminal_line()
+                erase_terminal_line()
                 output_path = Path("./tmp") / "out"
                 print("  Running on test ", test.input_path)
                 run_code(exec_path, test.input_path, output_path, time_limit_secs)
                 if self.verify_output(test, output_path):
                     subtask_score += score_per_test
 
+            erase_terminal_line()
+            erase_terminal_line()
             print("  Subtask score = %f" % subtask_score)
             score += subtask_score
+
+        print("%s has total score = %f" % (exec_path.name, score))
         return score
 
+    """
+    Verify output of a submission.
+    
+    - If output verifier is present, use it,
+    - Otherwise, `diff` is used.
+    """
     def verify_output(self, test: Test, output_path: Path) -> bool:
         if self.verifier_exec_path is None:
             command = "diff %s %s" % (test.output_path.resolve(), output_path.resolve())
@@ -164,7 +185,7 @@ class Problem:
                        test.output_path.resolve()]
 
         try:
-            subprocess.check_call(command)
+            subprocess.check_call(command, stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError as err:
             print("Error code: ", err.returncode)
