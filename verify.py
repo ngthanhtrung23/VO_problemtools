@@ -198,7 +198,6 @@ class Problem:
             subprocess.check_call(command, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             return True
         except subprocess.CalledProcessError as err:
-            print("Error code: ", err.returncode)
             return False
 
 
@@ -232,10 +231,17 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
     Returns True if code successfully finish execution, False otherwise.
     """
 
-    command = "%s < %s > %s" % (exec_path.resolve(), input_path.resolve(), output_path.resolve())
     output = None
     try:
-        output = subprocess.run(command, stderr=subprocess.STDOUT, shell=True, timeout=time_limit_secs)
+        inp = open(str(input_path.resolve()))
+        output = subprocess.run(str(exec_path.resolve()),
+                                stdin=inp,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL,
+                                shell=False,
+                                timeout=time_limit_secs)
+        with open(str(output_path.resolve()), 'wb') as stream:
+            stream.write(output.stdout)
         return True
     except subprocess.CalledProcessError as e:
         print("ERROR: Compile error for %s" % exec_path.resolve())
