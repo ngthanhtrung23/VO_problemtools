@@ -98,11 +98,11 @@ class Problem:
             self.verifier_path = None
             self.verifier_exec_path = None
 
-    """
-    Make sure all tests have input + output.
-    """
-
     def verify_tests(self):
+        """
+        Make sure all tests have input + output.
+        """
+
         cnt_input = count_file_with_extension(self.tests_path, "inp")
         cnt_output = count_file_with_extension(self.tests_path, "out")
         if cnt_input != cnt_output:
@@ -112,11 +112,11 @@ class Problem:
         print("Found %s tests" % cnt_input)
         # TODO: check for each input, output exists.
 
-    """
-    Verify all problems received score in range [min_score, max_score].
-    """
-
     def verify_submissions(self):
+        """
+        Verify all problems received score in range [min_score, max_score].
+        """
+
         if 'solutions' not in self.config:
             print("ERROR: No solutions found")
             return
@@ -139,11 +139,11 @@ class Problem:
             if score > max_score + EPS:
                 print("ERROR: %s received %f, max_score = %f" % (filename, score, max_score))
 
-    """
-    Judge an executable, and return the score.
-    """
-
     def judge_exec(self, exec_path: Path) -> float:
+        """
+        Judge an executable, and return the score.
+        """
+
         score = 0.0
         time_limit_secs = int(self.config['limits']['time_secs'])
         for subtask in self.subtasks:
@@ -161,7 +161,10 @@ class Problem:
                 erase_terminal_line()
                 output_path = Path("./tmp") / "out"
                 print("  Running on test ", test.input_path)
-                run_code(exec_path, test.input_path, output_path, time_limit_secs)
+                if not run_code(exec_path, test.input_path, output_path, time_limit_secs):
+                    # RE or TLE
+                    continue
+
                 if self.verify_output(test, output_path):
                     subtask_score += score_per_test
                 if self.verifier_exec_path is not None:
@@ -174,13 +177,14 @@ class Problem:
         print("%s has total score = %f" % (exec_path.name, score))
         return score
 
-    """
-    Verify output of a submission.
-    
-    - If output verifier is present, use it,
-    - Otherwise, `diff` is used.
-    """
     def verify_output(self, test: Test, output_path: Path) -> bool:
+        """
+        Verify output of a submission.
+
+        - If output verifier is present, use it,
+        - Otherwise, `diff` is used.
+        """
+
         if self.verifier_exec_path is None:
             command = ['diff',
                        test.output_path.resolve(),
@@ -222,11 +226,18 @@ def compile_cpp(code_path: Path, exec_path: Path):
             print(output)
 
 
-def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int):
+def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int) -> bool:
+    """
+    Run code, given time limit.
+
+    Returns True if code successfully finish execution, False otherwise.
+    """
+
     command = "%s < %s > %s" % (exec_path.resolve(), input_path.resolve(), output_path.resolve())
     output = None
     try:
         output = subprocess.run(command, stderr=subprocess.STDOUT, shell=True, timeout=time_limit_secs)
+        return True
     except subprocess.CalledProcessError as e:
         print("ERROR: Compile error for %s" % exec_path.resolve())
         print(e)
@@ -234,6 +245,9 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             print("------")
             print("Output:")
             print(output)
+        return False
+    except subprocess.TimeoutExpired as e:
+        return False
 
 
 def erase_terminal_line():
