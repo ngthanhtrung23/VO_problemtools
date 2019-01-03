@@ -1,0 +1,13 @@
+# Ide, editors
+.idea
+.swp
+.swo
+
+# Python virtualenv
+venv/
+
+# Judge logs
+logs/
+
+# Temp files
+tmp/
