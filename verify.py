@@ -11,6 +11,8 @@ COMPILE_COMMAND = "g++-8 %(code_path)s " \
                   "-I testlib/ " \
                   "-o %(exec_path)s"
 
+EPS = 10 ** -6
+
 # Clear last line in terminal
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
@@ -131,10 +133,10 @@ class Problem:
             min_score = submission['min_score']
             max_score = submission['max_score']
 
-            if score < min_score:
+            if score < min_score - EPS:
                 print("ERROR: %s received %f, min_score = %f" % (filename, score, min_score))
 
-            if score > max_score:
+            if score > max_score + EPS:
                 print("ERROR: %s received %f, max_score = %f" % (filename, score, max_score))
 
     """
@@ -152,20 +154,19 @@ class Problem:
                 continue
 
             print("  Running on tests..")
-            print("  Verdict..")
 
             score_per_test = 1.0 / len(subtask.tests) * subtask.score
             subtask_score = 0.0
             for test in subtask.tests:
-                erase_terminal_line()
                 erase_terminal_line()
                 output_path = Path("./tmp") / "out"
                 print("  Running on test ", test.input_path)
                 run_code(exec_path, test.input_path, output_path, time_limit_secs)
                 if self.verify_output(test, output_path):
                     subtask_score += score_per_test
+                if self.verifier_exec_path is not None:
+                    erase_terminal_line()
 
-            erase_terminal_line()
             erase_terminal_line()
             print("  Subtask score = %f" % subtask_score)
             score += subtask_score
@@ -181,7 +182,9 @@ class Problem:
     """
     def verify_output(self, test: Test, output_path: Path) -> bool:
         if self.verifier_exec_path is None:
-            command = "diff %s %s" % (test.output_path.resolve(), output_path.resolve())
+            command = ['diff',
+                       test.output_path.resolve(),
+                       output_path.resolve()]
         else:
             command = [self.verifier_exec_path.resolve(),
                        test.input_path.resolve(),
