@@ -167,8 +167,6 @@ class Problem:
 
                 if self.verify_output(test, output_path):
                     subtask_score += score_per_test
-                if self.verifier_exec_path is not None:
-                    erase_terminal_line()
 
             erase_terminal_line()
             print("  Subtask score = %f" % subtask_score)
@@ -196,7 +194,7 @@ class Problem:
                        test.output_path.resolve()]
 
         try:
-            subprocess.check_call(command, stderr=subprocess.STDOUT)
+            subprocess.check_call(command, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             return True
         except subprocess.CalledProcessError as err:
             print("Error code: ", err.returncode)
