@@ -115,6 +115,10 @@ class Problem:
     """
 
     def verify_submissions(self):
+        if 'solutions' not in self.config:
+            print("ERROR: No solutions found")
+            return
+
         for submission in self.config['solutions']:
             filename = str(submission['name'])
             print("Judging %s" % filename)
