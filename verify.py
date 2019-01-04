@@ -6,6 +6,7 @@ import sys
 import yaml
 
 from argparse import ArgumentParser
+from enum import Enum
 from pathlib import Path
 from termcolor import colored
 
@@ -41,6 +42,36 @@ def verification_success(message: str):
 
 def verification_failed(message: str):
     verification_status(message, False)
+
+
+class Verdict(Enum):
+    UNKNOWN = 0
+    ACCEPTED = 1
+    WRONG_ANSWER = 2
+    TIME_LIMIT_EXCEEDED = 3
+    RUNTIME_ERROR = 4
+
+    def __str__(self):
+        return self.name
+
+
+class SubtaskVerdict:
+    def __init__(self, verdict: Verdict, score: float):
+        self.verdict = verdict
+        self.score = score
+
+    def __str__(self):
+        return str(self.verdict) + " " + str(self.score)
+
+
+class ProblemVerdict:
+    def __init__(self):
+        self.verdicts = []
+        self.total_score = 0.0
+
+    def add_subtask_verdict(self, verdict: SubtaskVerdict):
+        self.verdicts.append(verdict)
+        self.total_score += verdict.score
 
 
 class Test:
@@ -119,7 +150,7 @@ class Problem:
         else:
             self.verifier_path = None
             self.verifier_exec_path = None
-            verification_success("No checker required. Using default diff -w")
+            verification_success("No checker required. Using default checker `diff -w`")
 
     def verify_tests(self):
         """
@@ -176,7 +207,8 @@ class Problem:
             exec_path = Path("./tmp") / filename[:filename.find('.')]
 
             compile_cpp(code_path, exec_path)
-            score = self.judge_exec(exec_path)
+            problem_verdict = self.judge_exec(exec_path)
+            score = problem_verdict.total_score
 
             min_score = submission['min_score']
             max_score = submission['max_score']
@@ -188,40 +220,44 @@ class Problem:
             else:
                 verification_success("%s received %f, in range [%f, %f]" % (filename, score, min_score, max_score))
 
-    def judge_exec(self, exec_path: Path) -> float:
+    def judge_exec(self, exec_path: Path) -> ProblemVerdict:
         """
         Judge an executable, and return the score.
         """
 
-        score = 0.0
         time_limit_secs = int(self.config['limits']['time_secs'])
+        problem_verdict = ProblemVerdict()
+
         for subtask in self.subtasks:
-            print("- Subtask: ", subtask.regex)
+            print("- Running Subtask %d" % subtask.subtask_id)
 
             if len(subtask.tests) == 0:
                 # Note that this is already checked in verify_subtasks, so we just skip and do not print anything here.
                 continue
 
-            print("  Running on tests..")
+            correct_tests = 0
+            rejected_verdict = Verdict.ACCEPTED
 
-            score_per_test = 1.0 / len(subtask.tests) * subtask.score
-            subtask_score = 0.0
             for test in subtask.tests:
-                erase_terminal_line()
                 output_path = Path("./tmp") / "out"
-                print("  Running on test ", test.input_path)
-                if not run_code(exec_path, test.input_path, output_path, time_limit_secs):
+                test_verdict = run_code(exec_path, test.input_path, output_path, time_limit_secs)
+
+                if test_verdict != Verdict.UNKNOWN:
                     # RE or TLE
+                    rejected_verdict = test_verdict
                     continue
 
                 if self.verify_output(test, output_path):
-                    subtask_score += score_per_test
+                    correct_tests += 1
+                else:
+                    rejected_verdict = Verdict.WRONG_ANSWER
 
             erase_terminal_line()
-            print("  Subtask score = %f" % subtask_score)
-            score += subtask_score
+            subtask_verdict = SubtaskVerdict(rejected_verdict, correct_tests * 1.0 / len(subtask.tests) * subtask.score)
+            print("- Subtask %d, verdict = %s" % (subtask.subtask_id, subtask_verdict))
+            problem_verdict.add_subtask_verdict(subtask_verdict)
 
-        return score
+        return problem_verdict
 
     def verify_output(self, test: Test, output_path: Path) -> bool:
         """
@@ -272,7 +308,7 @@ def compile_cpp(code_path: Path, exec_path: Path):
             print(output)
 
 
-def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int) -> bool:
+def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int) -> Verdict:
     """
     Run code, given time limit.
 
@@ -290,7 +326,9 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
                                 timeout=time_limit_secs)
         with open(str(output_path.resolve()), 'wb') as stream:
             stream.write(output.stdout)
-        return True
+
+        # Execution completed. Either AC or WA.
+        return Verdict.UNKNOWN
     except subprocess.CalledProcessError as e:
         verification_failed("ERROR: Execution error for %s" % exec_path.resolve())
         print(e)
@@ -298,9 +336,9 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             print("------")
             print("Output:")
             print(output)
-        return False
+        return Verdict.RUNTIME_ERROR
     except subprocess.TimeoutExpired as e:
-        return False
+        return Verdict.TIME_LIMIT_EXCEEDED
 
 
 def erase_terminal_line():
