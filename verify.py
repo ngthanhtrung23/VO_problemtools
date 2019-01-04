@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 
+import datetime
 import re
 import resource
 import subprocess
@@ -60,18 +61,23 @@ class Verdict(Enum):
 
 
 class TestVerdict:
-    def __init__(self, verdict: Verdict, exec_time: float):
+    def __init__(self, verdict: Verdict, exec_time: float, input_path: str):
         self.verdict = verdict
         self.exec_time = exec_time
+        self.input_path = input_path
 
     def __str__(self):
-        return str(self.verdict) + " " + "{:.2f}".format(self.exec_time) + "s"
+        if self.verdict == Verdict.TIME_LIMIT_EXCEEDED:
+            return str(self.verdict)
+        else:
+            return str(self.verdict) + " " + "{:.2f}".format(self.exec_time) + "s"
 
 
 class SubtaskVerdict:
-    def __init__(self):
+    def __init__(self, subtask_id: int):
         self.test_verdicts = []
         self.score = 0
+        self.subtask_id = subtask_id
 
     def add_test_verdict(self, test_verdict: TestVerdict):
         self.test_verdicts.append(test_verdict)
@@ -87,7 +93,8 @@ class SubtaskVerdict:
         if len(times) <= 8:
             times_str = ["{:.2f}".format(time) for time in times]
         else:
-            times_str = ["{:.2f}".format(time) for time in times[:4]] + ["..."] + ["{:.2f}".format(time) for time in times[-4:]]
+            times_str = ["{:.2f}".format(time) for time in times[:4]] + ["..."] + ["{:.2f}".format(time) for time in
+                                                                                   times[-4:]]
         return combined_verdict + ", score = {:.2f}".format(self.score) + ", times = " + str(times_str)
 
 
@@ -271,25 +278,36 @@ class Problem:
             verification_failed("No solutions found")
             return
 
-        for submission in self.config['solutions']:
-            filename = str(submission['name'])
-            print("Running %s" % filename)
-            code_path = self.submission_path / filename
-            exec_path = Path("./tmp") / filename[:filename.find('.')]
+        log_name = "./logs/" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+        with open(log_name, 'w') as log_stream:
+            for submission in self.config['solutions']:
+                filename = str(submission['name'])
+                print("Running %s" % filename)
+                code_path = self.submission_path / filename
+                exec_path = Path("./tmp") / filename[:filename.find('.')]
 
-            compile_cpp(code_path, exec_path)
-            problem_verdict = self.judge_exec(exec_path)
-            score = problem_verdict.total_score
+                compile_cpp(code_path, exec_path)
+                problem_verdict = self.judge_exec(exec_path)
+                score = problem_verdict.total_score
 
-            min_score = submission['min_score']
-            max_score = submission['max_score']
+                min_score = submission['min_score']
+                max_score = submission['max_score']
 
-            if score < min_score - EPS:
-                verification_failed("%s received %.1f, min_score = %.1f" % (filename, score, min_score))
-            elif score > max_score + EPS:
-                verification_failed("%s received %.1f, max_score = %.1f" % (filename, score, max_score))
-            else:
-                verification_success("%s received %.1f, in range [%.1f, %.1f]" % (filename, score, min_score, max_score))
+                if score < min_score - EPS:
+                    verification_failed("%s received %.1f, min_score = %.1f" % (filename, score, min_score))
+                elif score > max_score + EPS:
+                    verification_failed("%s received %.1f, max_score = %.1f" % (filename, score, max_score))
+                else:
+                    verification_success(
+                        "%s received %.1f, in range [%.1f, %.1f]" % (filename, score, min_score, max_score))
+
+                log_stream.write("Judge verdict for " + filename + "\n")
+                for subtask_verdict in problem_verdict.verdicts:
+                    log_stream.write("- Subtask " + str(subtask_verdict.subtask_id) + "\n")
+                    for test_verdict in subtask_verdict.test_verdicts:
+                        log_stream.write("    " + test_verdict.input_path + " " + str(test_verdict) + "\n")
+
+        verification_success("Printed judge log to %s" % log_name)
 
     def judge_exec(self, exec_path: Path) -> ProblemVerdict:
         """
@@ -308,7 +326,7 @@ class Problem:
 
             correct_tests = 0
 
-            subtask_verdict = SubtaskVerdict()
+            subtask_verdict = SubtaskVerdict(subtask.subtask_id)
             for test in subtask.tests:
                 output_path = Path("./tmp") / "out"
                 test_verdict = run_code(exec_path, test.input_path, output_path, time_limit_secs)
@@ -394,6 +412,7 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
 
     Returns True if code successfully finish execution, False otherwise.
     """
+    input_name = input_path.resolve().name
 
     # Find total time that children processes use previously.
     elapsed_time = get_children_elapsed_time()
@@ -411,16 +430,16 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             stream.write(output.stdout)
 
         # Execution completed. Either AC or WA.
-        return TestVerdict(Verdict.UNKNOWN, get_children_elapsed_time() - elapsed_time)
+        return TestVerdict(Verdict.UNKNOWN, get_children_elapsed_time() - elapsed_time, input_name)
     except subprocess.CalledProcessError as e:
         print(e)
         if output is not None:
             print("------")
             print("Output:")
             print(output)
-        return TestVerdict(Verdict.RUNTIME_ERROR, get_children_elapsed_time() - elapsed_time)
+        return TestVerdict(Verdict.RUNTIME_ERROR, get_children_elapsed_time() - elapsed_time, input_name)
     except subprocess.TimeoutExpired as e:
-        return TestVerdict(Verdict.TIME_LIMIT_EXCEEDED, -1)
+        return TestVerdict(Verdict.TIME_LIMIT_EXCEEDED, -1, input_name)
 
 
 def erase_terminal_line():
