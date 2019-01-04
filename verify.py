@@ -74,16 +74,10 @@ class Problem:
         self.verify_tests()
         print('Subtasks:')
         self.subtasks = []
-        total_score = 0
         for subtask in self.config['subtasks']:
             sub = Subtask(self.tests_path, subtask['regex'], subtask['score'], int(subtask['id']))
             print("- ", sub)
             self.subtasks.append(sub)
-            total_score += int(subtask['score'])
-
-        if total_score != int(self.config['problem']['score']):
-            raise ValueError("Total score of all subtask = %d, does not match problem config's total score = %d"
-                             % (total_score, self.config['problem']['score']))
 
         # self.verifier
         if 'checker' in self.config['problem']:
@@ -111,6 +105,12 @@ class Problem:
 
         print("Found %s tests" % cnt_input)
         # TODO: check for each input, output exists.
+
+    def verify_subtask_scores(self):
+        total_score = sum(subtask.score for subtask in self.subtasks)
+        if total_score != int(self.config['problem']['score']):
+            print("ERROR: Total score of all subtask = %d, does not match problem config's total score = %d"
+                  % (total_score, self.config['problem']['score']))
 
     def verify_submissions(self):
         """
@@ -272,6 +272,7 @@ def main():
         print("ERROR: %s" % str(e))
         return
 
+    problem.verify_subtask_scores()
     problem.verify_submissions()
 
 
