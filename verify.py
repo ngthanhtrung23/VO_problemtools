@@ -1,6 +1,7 @@
 # -*- coding: UTF-8 -*-
 
 import re
+import resource
 import subprocess
 import sys
 import yaml
@@ -54,14 +55,40 @@ class Verdict(Enum):
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        return self.name
+
+
+class TestVerdict:
+    def __init__(self, verdict: Verdict, exec_time: float):
+        self.verdict = verdict
+        self.exec_time = exec_time
+
+    def __str__(self):
+        return str(self.verdict) + " " + "{:.2f}".format(self.exec_time) + "s"
+
 
 class SubtaskVerdict:
-    def __init__(self, verdict: Verdict, score: float):
-        self.verdict = verdict
+    def __init__(self):
+        self.test_verdicts = []
+        self.score = 0
+
+    def add_test_verdict(self, test_verdict: TestVerdict):
+        self.test_verdicts.append(test_verdict)
+
+    def set_score(self, score: float):
         self.score = score
 
     def __str__(self):
-        return str(self.verdict) + " " + str(self.score)
+        rejected_verdicts = [t.verdict for t in self.test_verdicts if t.verdict != Verdict.ACCEPTED]
+        combined_verdict = str(set(rejected_verdicts)) if rejected_verdicts else 'ACCEPTED'
+        times = sorted([t.exec_time for t in self.test_verdicts])
+
+        if len(times) <= 8:
+            times_str = ["{:.2f}".format(time) for time in times]
+        else:
+            times_str = ["{:.2f}".format(time) for time in times[:4]] + ["..."] + ["{:.2f}".format(time) for time in times[-4:]]
+        return combined_verdict + ", score = {:.2f}".format(self.score) + ", times = " + str(times_str)
 
 
 class ProblemVerdict:
@@ -258,11 +285,11 @@ class Problem:
             max_score = submission['max_score']
 
             if score < min_score - EPS:
-                verification_failed("%s received %f, min_score = %f" % (filename, score, min_score))
+                verification_failed("%s received %.1f, min_score = %.1f" % (filename, score, min_score))
             elif score > max_score + EPS:
-                verification_failed("%s received %f, max_score = %f" % (filename, score, max_score))
+                verification_failed("%s received %.1f, max_score = %.1f" % (filename, score, max_score))
             else:
-                verification_success("%s received %f, in range [%f, %f]" % (filename, score, min_score, max_score))
+                verification_success("%s received %.1f, in range [%.1f, %.1f]" % (filename, score, min_score, max_score))
 
     def judge_exec(self, exec_path: Path) -> ProblemVerdict:
         """
@@ -280,24 +307,25 @@ class Problem:
                 continue
 
             correct_tests = 0
-            rejected_verdict = Verdict.ACCEPTED
 
+            subtask_verdict = SubtaskVerdict()
             for test in subtask.tests:
                 output_path = Path("./tmp") / "out"
                 test_verdict = run_code(exec_path, test.input_path, output_path, time_limit_secs)
 
-                if test_verdict != Verdict.UNKNOWN:
-                    # RE or TLE
-                    rejected_verdict = test_verdict
-                    continue
+                if test_verdict.verdict == Verdict.UNKNOWN:
+                    # WA or AC?
+                    if self.verify_output(test, output_path):
+                        correct_tests += 1
+                        test_verdict.verdict = Verdict.ACCEPTED
+                    else:
+                        test_verdict.verdict = Verdict.WRONG_ANSWER
 
-                if self.verify_output(test, output_path):
-                    correct_tests += 1
-                else:
-                    rejected_verdict = Verdict.WRONG_ANSWER
+                subtask_verdict.add_test_verdict(test_verdict)
+
+            subtask_verdict.set_score(correct_tests * 1.0 / len(subtask.tests) * subtask.score)
 
             erase_terminal_line()
-            subtask_verdict = SubtaskVerdict(rejected_verdict, correct_tests * 1.0 / len(subtask.tests) * subtask.score)
             print("- Subtask %d, verdict = %s" % (subtask.subtask_id, subtask_verdict))
             problem_verdict.add_subtask_verdict(subtask_verdict)
 
@@ -352,12 +380,23 @@ def compile_cpp(code_path: Path, exec_path: Path):
             print(output)
 
 
-def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int) -> Verdict:
+def get_children_elapsed_time() -> float:
+    """
+    :return: How much time children processes used.
+    """
+    info = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return info.ru_utime + info.ru_stime
+
+
+def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_secs: int) -> TestVerdict:
     """
     Run code, given time limit.
 
     Returns True if code successfully finish execution, False otherwise.
     """
+
+    # Find total time that children processes use previously.
+    elapsed_time = get_children_elapsed_time()
 
     output = None
     try:
@@ -372,17 +411,16 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             stream.write(output.stdout)
 
         # Execution completed. Either AC or WA.
-        return Verdict.UNKNOWN
+        return TestVerdict(Verdict.UNKNOWN, get_children_elapsed_time() - elapsed_time)
     except subprocess.CalledProcessError as e:
-        verification_failed("ERROR: Execution error for %s" % exec_path.resolve())
         print(e)
         if output is not None:
             print("------")
             print("Output:")
             print(output)
-        return Verdict.RUNTIME_ERROR
+        return TestVerdict(Verdict.RUNTIME_ERROR, get_children_elapsed_time() - elapsed_time)
     except subprocess.TimeoutExpired as e:
-        return Verdict.TIME_LIMIT_EXCEEDED
+        return TestVerdict(Verdict.TIME_LIMIT_EXCEEDED, -1)
 
 
 def erase_terminal_line():
