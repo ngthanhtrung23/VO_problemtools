@@ -207,14 +207,30 @@ class Problem:
 
             input_validator_passed = True
             for test in subtask.tests:
+                filename = str(test.input_path.resolve())
+
+                # We convert all \r\n to \n and update the original input file.
+                content = open(filename, 'r').read()
+                with open(filename, 'w', newline="\n") as f:
+                    f.write(content)
+
+                # Run input validator on input file.
+                inp = open(filename)
                 command = [self.input_validator_exec_path.resolve(),
                            str(subtask.subtask_id),
                            test.input_path.resolve()]
+                output = None
                 try:
-                    subprocess.check_call(command, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                    output = subprocess.run(command,
+                                            stdin=inp,
+                                            stderr=subprocess.DEVNULL,
+                                            stdout=subprocess.PIPE,
+                                            shell=False)
                 except subprocess.CalledProcessError as err:
                     verification_failed("Test %s failed input_validator: %s" % (test.input_path.resolve(), str(err)))
                     input_validator_passed = False
+                    if output is not None:
+                        print(output)
 
             if input_validator_passed:
                 verification_success("Subtask %d passed input validator." % subtask.subtask_id)
