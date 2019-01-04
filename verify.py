@@ -82,7 +82,7 @@ class SubtaskVerdict:
     def __str__(self):
         rejected_verdicts = [t.verdict for t in self.test_verdicts if t.verdict != Verdict.ACCEPTED]
         combined_verdict = str(set(rejected_verdicts)) if rejected_verdicts else 'ACCEPTED'
-        times = sorted([t.exec_time for t in self.test_verdicts])
+        times = sorted([t.exec_time for t in self.test_verdicts if t.exec_time >= 0])
 
         if len(times) <= 8:
             times_str = ["{:.2f}".format(time) for time in times]
