@@ -15,6 +15,8 @@ python verify.py <path/to/problem/dir>
 This will verify that:
 
 - Total score of all subtasks matches problem score,
+- All input have matching output (based on filename),
+- Input satisfies input_validator,
 - Compile and run all solutions,
 - Compile and run output checker,
 - Check that each solution has score in range $[min\_score, max\_score]$.
@@ -43,6 +45,7 @@ limits:
 problem:
         score: 70
         checker: p1_checker.cpp
+        input_validator: validator.cpp
 subtasks:
         - regex: sub0.*
           score: 0
@@ -65,6 +68,7 @@ solutions:
 Notes:
 
 - Checker's full path should be `problem_dir/output_checker/$checker_path$` where `$checker_path$` is configured in `problem.yaml`.
+- Input validator's full path should be `problem_dir/input_validator/$input_validator$` where `$input_validator$` is configured in `problem.yaml`.
 - All submissions should be inside `problem_dir/submissions`.
 - Subtask can have `score = 0`. This is usually used for sample test data.
 - `subtask.id` must match what being used in input validator.

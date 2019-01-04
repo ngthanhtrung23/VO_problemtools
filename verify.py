@@ -138,11 +138,23 @@ class Problem:
             raise ValueError("Submission dir not found. Please name it 'submissions'")
         verification_success("Submission dir found.")
 
+        # Input validator
+        if 'input_validator' not in self.config['problem']:
+            raise ValueError("input_validator not configured")
+
+        self.input_validator_path = self.path / "input_validator" / self.config['problem']['input_validator']
+        if not self.input_validator_path.exists():
+            raise ValueError("Input validator not found %s" % self.input_validator_path.resolve())
+
+        self.input_validator_exec_path = Path("./tmp") / "input_validator"
+        compile_cpp(self.input_validator_path, self.input_validator_exec_path)
+        verification_success("Input validator found at %s" % self.input_validator_path.resolve())
+
         # self.verifier
         if 'checker' in self.config['problem']:
             self.verifier_path = self.path / "output_checker" / self.config['problem']['checker']
             if not self.verifier_path.exists():
-                raise ValueError("Output checker not found: %s" % self.config['problem']['checker'])
+                raise ValueError("Output checker not found: %s" % self.verifier_path.resolve())
 
             self.verifier_exec_path = Path("./tmp") / "checker"
             compile_cpp(self.verifier_path, self.verifier_exec_path)
@@ -190,6 +202,22 @@ class Problem:
         for subtask in self.subtasks:
             if len(subtask.tests) == 0:
                 verification_failed("Subtask %d has 0 tests" % subtask.subtask_id)
+            else:
+                verification_success("Subtask %d has %d tests" % (subtask.subtask_id, len(subtask.tests)))
+
+            input_validator_passed = True
+            for test in subtask.tests:
+                command = [self.input_validator_exec_path.resolve(),
+                           str(subtask.subtask_id),
+                           test.input_path.resolve()]
+                try:
+                    subprocess.check_call(command, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                except subprocess.CalledProcessError as err:
+                    verification_failed("Test %s failed input_validator: %s" % (test.input_path.resolve(), str(err)))
+                    input_validator_passed = False
+
+            if input_validator_passed:
+                verification_success("Subtask %d passed input validator." % subtask.subtask_id)
 
     def verify_submissions(self):
         """
