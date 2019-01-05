@@ -114,7 +114,7 @@ class SubtaskVerdict:
         else:
             times_str = ["{:.2f}".format(time) for time in times[:4]] + ["..."] + ["{:.2f}".format(time) for time in
                                                                                    times[-4:]]
-        return combined_verdict + ", score = {:.2f}".format(self.score) + ", times = " + str(times_str)
+        return combined_verdict + ", score = {:.2f}".format(self.score)
 
 
 class ProblemVerdict:
