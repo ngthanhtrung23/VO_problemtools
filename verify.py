@@ -264,6 +264,10 @@ class Problem:
             else:
                 verification_success("Subtask %d has %d tests" % (subtask.subtask_id, len(subtask.tests)))
 
+            if subtask.subtask_id == 0:
+                # Do not run verification on sample data.
+                continue
+
             input_validator_passed = True
             for test in subtask.tests:
                 filename = str(test.input_path.resolve())
