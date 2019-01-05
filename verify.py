@@ -48,10 +48,10 @@ def verification_failed(message: str):
 
 class Verdict(Enum):
     UNKNOWN = 0
-    ACCEPTED = 1
-    WRONG_ANSWER = 2
-    TIME_LIMIT_EXCEEDED = 3
-    RUNTIME_ERROR = 4
+    AC = 1
+    WA = 2
+    TL = 3
+    RE = 4
 
     def __str__(self):
         return self.name
@@ -67,8 +67,8 @@ class TestVerdict:
         self.input_path = input_path
 
     def __str__(self):
-        if self.verdict == Verdict.TIME_LIMIT_EXCEEDED:
-            return str(self.verdict)
+        if self.verdict == Verdict.TL:
+            return str(self.verdict) + " -----"
         else:
             return str(self.verdict) + " " + "{:.2f}".format(self.exec_time) + "s"
 
@@ -86,8 +86,8 @@ class SubtaskVerdict:
         self.score = score
 
     def __str__(self):
-        rejected_verdicts = [t.verdict for t in self.test_verdicts if t.verdict != Verdict.ACCEPTED]
-        combined_verdict = str(set(rejected_verdicts)) if rejected_verdicts else 'ACCEPTED'
+        rejected_verdicts = [t.verdict for t in self.test_verdicts if t.verdict != Verdict.AC]
+        combined_verdict = str(set(rejected_verdicts)) if rejected_verdicts else 'AC'
         times = sorted([t.exec_time for t in self.test_verdicts if t.exec_time >= 0])
 
         if len(times) <= 8:
@@ -305,7 +305,7 @@ class Problem:
                 for subtask_verdict in problem_verdict.verdicts:
                     log_stream.write("- Subtask " + str(subtask_verdict.subtask_id) + "\n")
                     for test_verdict in subtask_verdict.test_verdicts:
-                        log_stream.write("    " + test_verdict.input_path + " " + str(test_verdict) + "\n")
+                        log_stream.write("    " + str(test_verdict) + " " + test_verdict.input_path + "\n")
 
         verification_success("Printed judge log to %s" % log_name)
 
@@ -335,9 +335,9 @@ class Problem:
                     # WA or AC?
                     if self.verify_output(test, output_path):
                         correct_tests += 1
-                        test_verdict.verdict = Verdict.ACCEPTED
+                        test_verdict.verdict = Verdict.AC
                     else:
-                        test_verdict.verdict = Verdict.WRONG_ANSWER
+                        test_verdict.verdict = Verdict.WA
 
                 subtask_verdict.add_test_verdict(test_verdict)
 
@@ -437,9 +437,9 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             print("------")
             print("Output:")
             print(output)
-        return TestVerdict(Verdict.RUNTIME_ERROR, get_children_elapsed_time() - elapsed_time, input_name)
+        return TestVerdict(Verdict.RE, get_children_elapsed_time() - elapsed_time, input_name)
     except subprocess.TimeoutExpired as e:
-        return TestVerdict(Verdict.TIME_LIMIT_EXCEEDED, -1, input_name)
+        return TestVerdict(Verdict.TL, -1, input_name)
 
 
 def erase_terminal_line():
