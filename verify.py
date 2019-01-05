@@ -21,8 +21,8 @@ COMPILE_COMMAND = "g++-8 %(code_path)s " \
 EPS = 10 ** -6
 
 # Input and output file format
-INPUT_SUFFIX = ".inp"
-OUTPUT_SUFFIX = ".out"
+DEFAULT_INPUT_SUFFIX = "inp"
+DEFAULT_OUTPUT_SUFFIX = "out"
 
 # Clear last line in terminal
 CURSOR_UP_ONE = '\x1b[1A'
@@ -141,7 +141,8 @@ class Test:
 
 
 class Subtask:
-    def __init__(self, tests_path: Path, regex: str, score: int, subtask_id: int):
+    def __init__(self, tests_path: Path, regex: str, score: int, subtask_id: int,
+                 input_suffix: str, output_suffix: str):
         self.score = score
         self.regex = regex
         self.subtask_id = subtask_id
@@ -149,11 +150,11 @@ class Subtask:
         self.tests = []
         compiled_regex = re.compile(regex)
         for filename in tests_path.iterdir():
-            if compiled_regex.match(filename.name) and filename.suffix == INPUT_SUFFIX:
+            if compiled_regex.match(filename.name) and filename.suffix == '.' + input_suffix:
                 test_name = filename.name[:filename.name.find('.')]
                 test = Test(tests_path,
-                            input=test_name + INPUT_SUFFIX,
-                            output=test_name + OUTPUT_SUFFIX,
+                            input=test_name + '.' + input_suffix,
+                            output=test_name + '.' + output_suffix,
                             subtask_id=subtask_id)
                 self.tests.append(test)
 
@@ -162,7 +163,7 @@ class Subtask:
 
 
 class Problem:
-    def __init__(self, relative_path):
+    def __init__(self, relative_path: str):
         # self.path = Path to problem directory.
         try:
             self.path = Path(relative_path)
@@ -183,10 +184,26 @@ class Problem:
         if not self.tests_path.is_dir():
             raise ValueError("Test directory not found. Please rename test dir to 'tests'")
 
+        # Init self.input_suffix and self.output_suffix from config.
+        if 'input_suffix' in self.config['problem']:
+            self.input_suffix = self.config['problem']['input_suffix']
+        else:
+            self.input_suffix = DEFAULT_INPUT_SUFFIX
+
+        if 'output_suffix' in self.config['problem']:
+            self.output_suffix = self.config['problem']['output_suffix']
+        else:
+            self.output_suffix = DEFAULT_OUTPUT_SUFFIX
+
         # self.subtasks
         self.subtasks = []
         for subtask in self.config['subtasks']:
-            sub = Subtask(self.tests_path, subtask['regex'], subtask['score'], int(subtask['id']))
+            sub = Subtask(self.tests_path,
+                          subtask['regex'],
+                          subtask['score'],
+                          int(subtask['id']),
+                          self.input_suffix,
+                          self.output_suffix)
             self.subtasks.append(sub)
         verification_success(
             "%d subtasks, scores = %s" % (len(self.subtasks), [subtask.score for subtask in self.subtasks]))
@@ -229,8 +246,8 @@ class Problem:
         """
 
         # Verify that number of input file == number of output file.
-        cnt_input = count_file_with_extension(self.tests_path, "inp")
-        cnt_output = count_file_with_extension(self.tests_path, "out")
+        cnt_input = count_file_with_extension(self.tests_path, self.input_suffix)
+        cnt_output = count_file_with_extension(self.tests_path, self.output_suffix)
         if cnt_input != cnt_output:
             verification_failed("ERROR: Number of input and output files NOT match: Found %s input and %s output" % (
                 cnt_input, cnt_output))
@@ -240,10 +257,10 @@ class Problem:
         # Verify that the set of file names of all inputs matches the set of file names of all outputs.
         input_file_names = set(
             [filename.with_suffix('').name for filename in self.tests_path.iterdir() if
-             filename.suffix == INPUT_SUFFIX])
+             filename.suffix == '.' + self.input_suffix])
         output_file_names = set(
             [filename.with_suffix('').name for filename in self.tests_path.iterdir() if
-             filename.suffix == OUTPUT_SUFFIX])
+             filename.suffix == '.' + self.output_suffix])
         if input_file_names == output_file_names:
             verification_success("Input and output file names match")
         else:
