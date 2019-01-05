@@ -278,18 +278,22 @@ class Problem:
                 command = [self.input_validator_exec_path.resolve(),
                            str(subtask.subtask_id),
                            test.input_path.resolve()]
-                output = None
+                result = None
                 try:
-                    output = subprocess.run(command,
+                    result = subprocess.run(command,
                                             stdin=inp,
                                             stderr=subprocess.DEVNULL,
                                             stdout=subprocess.PIPE,
                                             shell=False)
                 except subprocess.CalledProcessError as err:
-                    verification_failed("Test %s failed input_validator: %s" % (test.input_path.resolve(), str(err)))
                     input_validator_passed = False
-                    if output is not None:
-                        print(output)
+                    verification_failed("Test %s failed input_validator: %s" % (test.input_path.resolve(), str(err)))
+
+                if result.returncode != 0:
+                    input_validator_passed = False
+                    verification_failed("Test %s failed input_validator" % test.input_path.resolve())
+                    if result.stdout is not None:
+                        print(result.stdout)
 
             if input_validator_passed:
                 verification_success("Subtask %d passed input validator." % subtask.subtask_id)
@@ -442,26 +446,29 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
     # Find total time that children processes use previously.
     elapsed_time = get_children_process_elapsed_time()
 
-    output = None
+    result = None
     try:
         inp = open(str(input_path.resolve()))
-        output = subprocess.run(str(exec_path.resolve()),
+        result = subprocess.run(str(exec_path.resolve()),
                                 stdin=inp,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL,
                                 shell=False,
                                 timeout=time_limit_secs)
         with open(str(output_path.resolve()), 'wb') as stream:
-            stream.write(output.stdout)
+            stream.write(result.stdout)
+
+        if result.returncode != 0:
+            return TestVerdict(Verdict.RE, get_children_process_elapsed_time() - elapsed_time, input_name)
 
         # Execution completed. Either AC or WA.
         return TestVerdict(Verdict.UNKNOWN, get_children_process_elapsed_time() - elapsed_time, input_name)
     except subprocess.CalledProcessError as e:
         print(e)
-        if output is not None:
+        if result is not None:
             print("------")
             print("Output:")
-            print(output)
+            print(result)
         return TestVerdict(Verdict.RE, get_children_process_elapsed_time() - elapsed_time, input_name)
     except subprocess.TimeoutExpired as e:
         return TestVerdict(Verdict.TL, -1, input_name)
