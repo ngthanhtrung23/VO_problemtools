@@ -17,19 +17,26 @@ COMPILE_COMMAND = "g++-8 %(code_path)s " \
                   "-I testlib/ " \
                   "-o %(exec_path)s"
 
+# EPS for comparing scores.
 EPS = 10 ** -6
+
+# Input and output file format
+INPUT_SUFFIX = ".inp"
+OUTPUT_SUFFIX = ".out"
 
 # Clear last line in terminal
 CURSOR_UP_ONE = '\x1b[1A'
 ERASE_LINE = '\x1b[2K'
 
+
+def erase_terminal_line():
+    sys.stdout.write(CURSOR_UP_ONE)
+    sys.stdout.write(ERASE_LINE)
+
+
 # For printing verification status
 TICK = '✔'
 CROSS = '✘'
-
-# Input and output file format
-INPUT_SUFFIX = ".inp"
-OUTPUT_SUFFIX = ".out"
 
 
 def verification_status(message: str, success: bool):
@@ -61,10 +68,16 @@ class Verdict(Enum):
 
 
 class TestVerdict:
-    def __init__(self, verdict: Verdict, exec_time: float, input_path: str):
+    """
+    TestVerdict contains verdict for a single test case, which includes:
+    - verdict: AC / WA / TL / RE / ...
+    - exec_time: running time of solution in second.
+    """
+
+    def __init__(self, verdict: Verdict, exec_time: float, input_name: str):
         self.verdict = verdict
         self.exec_time = exec_time
-        self.input_path = input_path
+        self.input_path = input_name
 
     def __str__(self):
         if self.verdict == Verdict.TL:
@@ -74,6 +87,12 @@ class TestVerdict:
 
 
 class SubtaskVerdict:
+    """
+    SubtaskVerdict contains verdict for a single subtask, which includes:
+    - score: total score solution receives for this subtask.
+    - test_verdicts: list of TestVerdict.
+    """
+
     def __init__(self, subtask_id: int):
         self.test_verdicts = []
         self.score = 0
@@ -99,6 +118,12 @@ class SubtaskVerdict:
 
 
 class ProblemVerdict:
+    """
+    ProblemVerdict is a verdict of a submission for a problem, which includes:
+    - total_score.
+    - verdicts: list of SubtaskVerdict.
+    """
+
     def __init__(self):
         self.verdicts = []
         self.total_score = 0.0
@@ -398,7 +423,7 @@ def compile_cpp(code_path: Path, exec_path: Path):
             print(output)
 
 
-def get_children_elapsed_time() -> float:
+def get_children_process_elapsed_time() -> float:
     """
     :return: How much time children processes used.
     """
@@ -415,7 +440,7 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
     input_name = input_path.resolve().name
 
     # Find total time that children processes use previously.
-    elapsed_time = get_children_elapsed_time()
+    elapsed_time = get_children_process_elapsed_time()
 
     output = None
     try:
@@ -430,21 +455,16 @@ def run_code(exec_path: Path, input_path: Path, output_path: Path, time_limit_se
             stream.write(output.stdout)
 
         # Execution completed. Either AC or WA.
-        return TestVerdict(Verdict.UNKNOWN, get_children_elapsed_time() - elapsed_time, input_name)
+        return TestVerdict(Verdict.UNKNOWN, get_children_process_elapsed_time() - elapsed_time, input_name)
     except subprocess.CalledProcessError as e:
         print(e)
         if output is not None:
             print("------")
             print("Output:")
             print(output)
-        return TestVerdict(Verdict.RE, get_children_elapsed_time() - elapsed_time, input_name)
+        return TestVerdict(Verdict.RE, get_children_process_elapsed_time() - elapsed_time, input_name)
     except subprocess.TimeoutExpired as e:
         return TestVerdict(Verdict.TL, -1, input_name)
-
-
-def erase_terminal_line():
-    sys.stdout.write(CURSOR_UP_ONE)
-    sys.stdout.write(ERASE_LINE)
 
 
 def main():
