@@ -324,6 +324,12 @@ class Problem:
         Verify all problems received score in range [min_score, max_score].
         """
 
+        all_submissions = set([f.name for f in self.submission_path.iterdir() if f.suffix.endswith('cpp')])
+        configured_submissions = set([f['name'] for f in self.config['solutions']])
+        if all_submissions.difference(configured_submissions):
+            verification_failed(
+                "Found extra submissions (NOT in config.yaml): %s" % all_submissions.difference(configured_submissions))
+
         if 'solutions' not in self.config:
             verification_failed("No solutions found")
             return
