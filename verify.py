@@ -146,17 +146,29 @@ class Subtask:
         self.score = score
         self.regex = regex
         self.subtask_id = subtask_id
+        self.input_suffix = input_suffix
+        self.output_suffix = output_suffix
 
         self.tests = []
-        compiled_regex = re.compile(regex)
-        for filename in tests_path.iterdir():
-            if compiled_regex.match(filename.name) and filename.suffix == '.' + input_suffix:
-                test_name = filename.name[:filename.name.find('.')]
-                test = Test(tests_path,
-                            input=test_name + '.' + input_suffix,
-                            output=test_name + '.' + output_suffix,
-                            subtask_id=subtask_id)
-                self.tests.append(test)
+        self.compiled_regex = re.compile(regex)
+        self.walk_folder(tests_path)
+
+    def walk_folder(self, path: Path):
+        if path.is_dir():
+            for child in path.iterdir():
+                self.walk_folder(child)
+        else:
+            if self.compiled_regex.match(path.name) and path.suffix == '.' + self.input_suffix:
+                test_name = path.name[:path.name.find('.')]
+                output_path = path.with_suffix('.' + self.output_suffix)
+                if output_path.exists():
+                    test = Test(path.parent,
+                                input=test_name + '.' + self.input_suffix,
+                                output=test_name + '.' + self.output_suffix,
+                                subtask_id=self.subtask_id)
+                    self.tests.append(test)
+                else:
+                    verification_failed("Output not found for input %s" % test_name)
 
     def __str__(self):
         return "id: %d; score: %d; %d tests" % (self.subtask_id, self.score, len(self.tests))
@@ -513,7 +525,7 @@ def main():
         verification_failed("ERROR: %s" % str(e))
         return
 
-    problem.verify_tests()
+    # problem.verify_tests()
     problem.verify_subtasks()
     problem.verify_submissions()
 
