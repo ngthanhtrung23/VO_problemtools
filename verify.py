@@ -320,6 +320,7 @@ class Problem:
             return
 
         log_name = "./logs/" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+        cnt_ac = 0
         with open(log_name, 'w') as log_stream:
             for submission in self.config['solutions']:
                 filename = str(submission['name'])
@@ -334,6 +335,9 @@ class Problem:
                 min_score = submission['min_score']
                 max_score = submission['max_score']
 
+                if min_score > self.config['problem']['score'] - EPS:
+                    cnt_ac += 1
+
                 if score < min_score - EPS:
                     verification_failed("%s received %.1f, min_score = %.1f" % (filename, score, min_score))
                 elif score > max_score + EPS:
@@ -347,6 +351,9 @@ class Problem:
                     log_stream.write("- Subtask " + str(subtask_verdict.subtask_id) + "\n")
                     for test_verdict in subtask_verdict.test_verdicts:
                         log_stream.write("    " + str(test_verdict) + " " + test_verdict.input_path + "\n")
+
+        if cnt_ac <= 1:
+            verification_failed("Only 0 or 1 AC solution")
 
         verification_success("Printed judge log to %s" % log_name)
 
