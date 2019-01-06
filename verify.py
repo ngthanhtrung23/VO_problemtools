@@ -252,33 +252,6 @@ class Problem:
             self.verifier_exec_path = None
             verification_success("No checker required. Using default checker `diff -w`")
 
-    def verify_tests(self):
-        """
-        Make sure all tests have input + output.
-        """
-
-        # Verify that number of input file == number of output file.
-        cnt_input = count_file_with_extension(self.tests_path, self.input_suffix)
-        cnt_output = count_file_with_extension(self.tests_path, self.output_suffix)
-        if cnt_input != cnt_output:
-            verification_failed("ERROR: Number of input and output files NOT match: Found %s input and %s output" % (
-                cnt_input, cnt_output))
-
-        verification_success("Found %s tests" % cnt_input)
-
-        # Verify that the set of file names of all inputs matches the set of file names of all outputs.
-        input_file_names = set(
-            [filename.with_suffix('').name for filename in self.tests_path.iterdir() if
-             filename.suffix == '.' + self.input_suffix])
-        output_file_names = set(
-            [filename.with_suffix('').name for filename in self.tests_path.iterdir() if
-             filename.suffix == '.' + self.output_suffix])
-        if input_file_names == output_file_names:
-            verification_success("Input and output file names match")
-        else:
-            verification_failed("Input and output file names not match:\nIn - Out = %s\nOut - In = %s" % (
-                input_file_names.difference(output_file_names), output_file_names.difference(input_file_names)))
-
     def verify_subtasks(self):
         # Verify total score of all subtask == problem score.
         total_score = sum(subtask.score for subtask in self.subtasks)
@@ -441,14 +414,6 @@ class Problem:
             return True
         except subprocess.CalledProcessError as err:
             return False
-
-
-def count_file_with_extension(path: Path, extension: str) -> int:
-    cnt = 0
-    for filename in path.iterdir():
-        if not filename.is_dir() and filename.suffix == "." + extension:
-            cnt += 1
-    return cnt
 
 
 def compile_cpp(code_path: Path, exec_path: Path):
